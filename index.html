@@ -148,6 +148,63 @@
   .winbox p{margin:6px 0; color:#555; font-size:15px}
   .winbox .actions{display:flex; gap:10px; margin-top:18px; justify-content:center; flex-wrap:wrap}
   .winbox .actions .btn{background:#1d6b45; color:#fff; min-height:42px; font-size:15px}
+  .winbox .actions .btn.ghost{background:#e8e2d2; color:#333}
+
+  /* ===== ЭКРАНЫ: МЕНЮ / РЕКОРДЫ ===== */
+  .screen{
+    position:fixed; inset:0; z-index:200;
+    display:none; flex-direction:column; align-items:center; justify-content:center;
+    padding:22px; text-align:center; overflow-y:auto;
+    background:
+      radial-gradient(90% 70% at 50% 12%, rgba(217,180,91,.10), rgba(0,0,0,0) 60%),
+      radial-gradient(130% 100% at 50% 0%, #234438 0%, #0e1c15 55%, #060e0a 100%);
+  }
+  .screen.show{display:flex}
+  .screen h1{
+    font-family:Georgia,'Times New Roman',serif;
+    font-size:46px; letter-spacing:6px; margin:0 0 2px;
+    color:var(--gold-soft);
+    text-shadow:0 0 22px rgba(217,180,91,.45), 0 2px 0 rgba(0,0,0,.65);
+  }
+  .screen .sub{color:#9fb39a; font-size:12px; letter-spacing:3px; text-transform:uppercase; margin:0 0 30px}
+  .menu-inner{width:100%; max-width:330px; display:flex; flex-direction:column; align-items:center}
+  .menu .logo-card{
+    position:relative; top:auto; left:auto;
+    width:104px; height:146px; border-radius:12px;
+    margin:6px 0 20px; cursor:default;
+    transform:rotate(-7deg);
+    box-shadow:var(--card-shadow), 0 0 0 2px rgba(217,180,91,.4), 0 20px 44px rgba(0,0,0,.55);
+  }
+  .menu-btn{
+    display:flex; align-items:center; justify-content:center;
+    width:100%; border:0; border-radius:14px;
+    padding:15px 22px; margin:7px 0; font-size:19px; font-weight:800; letter-spacing:.4px;
+    cursor:pointer; min-height:56px; touch-action:manipulation;
+    transition:transform .08s ease;
+  }
+  .menu-btn:active{transform:scale(.96)}
+  .menu-btn.play{
+    background:linear-gradient(135deg,#efd488 0%,#d4a64a 55%,#b5852b 100%);
+    color:#3a2505;
+    box-shadow:0 8px 24px rgba(217,180,91,.32), inset 0 1px 0 rgba(255,246,214,.85);
+  }
+  .menu-btn.ghost{
+    background:rgba(255,255,255,.07); color:#f2e8cd;
+    box-shadow:inset 0 0 0 1.5px rgba(217,180,91,.5);
+  }
+  .menu-btn.small{width:auto; padding:12px 26px; font-size:16px; min-height:46px}
+  .records h1{font-size:32px; letter-spacing:4px}
+  .records .bestline{margin:10px 0 4px; color:#efd488; font-size:15px; font-weight:700}
+  .rec-list{width:100%; max-width:330px; display:flex; flex-direction:column; gap:8px; margin:14px 0 20px}
+  .rec-item{
+    display:flex; justify-content:space-between; align-items:center; gap:10px;
+    background:rgba(255,255,255,.05); border:1px solid rgba(217,180,91,.2);
+    border-radius:12px; padding:10px 14px; font-size:15px; color:#eef2df;
+  }
+  .rec-item .n{color:var(--gold); font-weight:800; margin-right:8px}
+  .rec-item .when{color:#8fa48a; font-size:11px; white-space:nowrap}
+  .rec-item.best{border-color:var(--gold); background:rgba(217,180,91,.13)}
+  .rec-empty{color:#9fb39a; font-size:14px; margin:10px 0 20px}
 </style>
 </head>
 <body>
@@ -178,8 +235,28 @@
   <p id="winStats"></p>
   <div class="actions">
     <button class="btn" id="againBtn">Сыграть ещё</button>
+    <button class="btn ghost" id="toMenuBtn">В меню</button>
   </div>
 </div></div>
+
+<div id="menuScreen" class="screen menu show">
+  <div class="menu-inner">
+    <div class="card face-down logo-card"></div>
+    <h1>КОСЫНКА</h1>
+    <div class="sub">Северный пасьянс</div>
+    <button class="menu-btn play" id="playBtn">▶&nbsp;&nbsp;Играть</button>
+    <button class="menu-btn ghost" id="recordsBtn">🏆&nbsp;&nbsp;Рекорды</button>
+  </div>
+</div>
+
+<div id="recordsScreen" class="screen records">
+  <div class="menu-inner">
+    <h1>Рекорды</h1>
+    <div id="bestLine" class="bestline"></div>
+    <div id="recList" class="rec-list"></div>
+    <button class="menu-btn ghost small" id="backBtn">← Назад</button>
+  </div>
+</div>
 
 <script>
 'use strict';
@@ -491,13 +568,59 @@ function checkWin(){
   if(total === 52 && !won){
     won = true;
     stopTimer();
-    $('winStats').textContent = 'Время: ' + fmt(seconds) + ' · Ходы: ' + moves;
+    const prevBest = loadRec()[0] || null;
+    saveRec(seconds, moves);
+    const nb = !prevBest || seconds < prevBest.t || (seconds === prevBest.t && moves < prevBest.m);
+    $('winStats').innerHTML = 'Время: ' + fmt(seconds) + ' · Ходы: ' + moves
+      + (nb ? '<br>🏆 Новый рекорд!' : '');
     $('winOverlay').classList.add('show');
   }
 }
 
+/* ================= РЕКОРДЫ / МЕНЮ ================= */
+const REC_KEY = 'klondike_records_v1';
+function loadRec(){
+  try{ return JSON.parse(localStorage.getItem(REC_KEY)) || []; }
+  catch(e){ return []; }
+}
+function saveRec(t, m){
+  const a = loadRec();
+  a.push({ t:t, m:m, d:new Date().toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) });
+  a.sort((x,y) => x.t - y.t || x.m - y.m);
+  try{ localStorage.setItem(REC_KEY, JSON.stringify(a.slice(0,8))); }catch(e){}
+}
+function plural(n){
+  const m10 = n % 10, m100 = n % 100;
+  if(m10 === 1 && m100 !== 11) return 'ход';
+  if(m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return 'хода';
+  return 'ходов';
+}
+function renderRecords(){
+  const a = loadRec();
+  const list = $('recList'), best = $('bestLine');
+  if(!a.length){
+    best.textContent = '';
+    list.innerHTML = '<div class="rec-empty">Пока нет рекордов. Сыграй первую партию!</div>';
+    return;
+  }
+  best.textContent = 'Лучший результат: ' + fmt(a[0].t) + ' · ' + a[0].m + ' ' + plural(a[0].m);
+  list.innerHTML = a.map((r,i) =>
+    '<div class="rec-item' + (i===0?' best':'') + '">'
+    + '<span><span class="n">' + (i+1) + '</span>' + fmt(r.t) + ' · ' + r.m + ' ' + plural(r.m) + '</span>'
+    + '<span class="when">' + r.d + '</span>'
+    + '</div>'
+  ).join('');
+}
+function showMenu(){
+  won = false;
+  stopTimer();
+  $('winOverlay').classList.remove('show');
+  $('recordsScreen').classList.remove('show');
+  $('menuScreen').classList.add('show');
+}
+
 /* ================= НОВАЯ ИГРА ================= */
-function newGame(){
+function newGame(fromMenu){
   stopTimer();
   moves = 0; seconds = 0; won = false; selected = null; history = [];
   const deck = shuffle(makeDeck());
@@ -512,8 +635,9 @@ function newGame(){
   }
   for(;k<52;k++) stock.push(deck[k]);
   $('winOverlay').classList.remove('show');
+  $('menuScreen').classList.remove('show');
   render();
-  startTimer();
+  if(!fromMenu) startTimer();
 }
 
 function undo(){
@@ -747,10 +871,14 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('dblclick', e => e.preventDefault());
 
-$('newBtn').addEventListener('click', newGame);
+$('newBtn').addEventListener('click', () => newGame());
 $('undoBtn').addEventListener('click', undo);
 $('hintBtn').addEventListener('click', showHint);
-$('againBtn').addEventListener('click', newGame);
+$('againBtn').addEventListener('click', () => newGame());
+$('toMenuBtn').addEventListener('click', showMenu);
+$('playBtn').addEventListener('click', () => newGame());
+$('recordsBtn').addEventListener('click', () => { renderRecords(); $('recordsScreen').classList.add('show'); });
+$('backBtn').addEventListener('click', () => $('recordsScreen').classList.remove('show'));
 
 /* ================= АДАПТИВ (размер карт) ================= */
 let resizeT = null;
@@ -771,7 +899,7 @@ window.addEventListener('resize', () => {
   resizeT = setTimeout(recalc, 160);
 });
 
-newGame();
+newGame(true); // подготовить поле без запуска таймера — на экране меню
 recalc();
 </script>
 </body>
