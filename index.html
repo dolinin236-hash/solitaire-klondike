@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#12402a">
+<title>Косынка — пасьянс</title>
+<style>
+  :root{
+    --bg1:#1c2b24; --bg2:#0c1813;
+    --felt:radial-gradient(130% 100% at 50% 0%, #2e4a41 0%, #183027 55%, #0a1712 100%);
+    --card:#f5ecd4; --card-shadow:0 3px 9px rgba(0,0,0,.45);
+    --red:#a4161a; --black:#262019;
+    --gold:#d9b45b; --gold-soft:#f5d48a;
+    --pile-w:90px; --pile-h:128px;
+    --gap:6px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+  html,body{height:100%;margin:0}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background:var(--felt); color:#fff;
+    overscroll-behavior:none; touch-action:manipulation;
+    overflow-y:auto; padding-bottom:36px;
+  }
+  .topbar{
+    position:sticky; top:0; z-index:60;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:8px 12px 4px; font-size:13px; color:#cfdccb; gap:8px;
+    background:linear-gradient(180deg, rgba(8,22,17,.85), rgba(8,22,17,0));
+    backdrop-filter:blur(2px);
+  }
+  .topbar .stats{display:flex; gap:12px; align-items:center; white-space:nowrap}
+  .topbar b{color:#fff; font-size:15px}
+  .btn{
+    border:0; border-radius:10px; padding:6px 12px; font-size:13px; font-weight:700;
+    background:rgba(255,255,255,.16); color:#fff; cursor:pointer;
+    min-height:34px; touch-action:manipulation;
+  }
+  .btn:active{transform:scale(.95)}
+  .btn:disabled{opacity:.35; pointer-events:none}
+  .btn.primary{background:var(--gold); color:#3a2505}
+
+  .toprow{
+    display:flex; justify-content:space-between; align-items:flex-start;
+    gap:8px; max-width:760px; margin:2px auto 0; padding:0 8px;
+  }
+  .stockzone{display:flex; gap:var(--gap)}
+  .fdzone{display:flex; gap:var(--gap)}
+  .pile{
+    position:relative;
+    width:var(--pile-w); height:var(--pile-h);
+    border-radius:9px; flex:none;
+    z-index:0;
+  }
+  .pile.empty{
+    border:2px dashed rgba(217,180,91,.5);
+    background:rgba(217,180,91,.06);
+  }
+  .pile.empty .recycle{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    font-size:calc(var(--pile-w)*.42); color:rgba(217,180,91,.4);
+  }
+  .pile .cnt{
+    position:absolute; right:-4px; bottom:-4px; z-index:30;
+    background:#0c1813; color:#cfdccb; font-size:11px; font-weight:800;
+    min-width:20px; height:20px; border-radius:10px;
+    display:flex; align-items:center; justify-content:center;
+    padding:0 5px; box-shadow:0 1px 4px rgba(0,0,0,.4);
+  }
+  [data-act], [data-fd]{cursor:pointer}
+
+  #board{
+    display:grid;
+    grid-template-columns:repeat(7,1fr);
+    gap:var(--gap);
+    padding:8px 8px 10px;
+    max-width:760px; margin:0 auto;
+  }
+  .col{position:relative}
+  .droplayer{position:absolute; inset:0; z-index:0; border-radius:10px}
+
+  .card{
+    position:absolute; top:0; left:0;
+    width:var(--pile-w); height:var(--pile-h);
+    background:
+      radial-gradient(120% 100% at 50% 0%, rgba(255,255,255,.5) 0%, rgba(255,255,255,0) 55%),
+      linear-gradient(160deg,#f7eed8 0%, #ecdfbb 55%, #dcc99b 100%);
+    border-radius:8px;
+    box-shadow:var(--card-shadow),
+      inset 0 0 0 1px rgba(124,94,34,.6),
+      inset 0 0 0 3px rgba(255,252,240,.92),
+      inset 0 0 0 4px rgba(150,116,44,.38);
+    color:var(--black);
+    font-size:calc(var(--pile-w)*0.2);
+    line-height:1;
+    display:flex; flex-direction:column;
+    cursor:pointer; touch-action:none;
+  }
+  .pile .card{z-index:10}
+  .card.red{color:var(--red)}
+  .card .corner{position:absolute; top:4px; left:6px; font-weight:800; text-align:center; z-index:2; pointer-events:none; text-shadow:0 1px 0 rgba(255,250,225,.6)}
+  .card .corner small{display:block; font-size:.55em; margin-top:1px}
+  .card .sym{position:absolute; font-size:calc(var(--pile-w)*.5); z-index:2; pointer-events:none; text-shadow:0 1px 0 rgba(255,250,225,.5)}
+  .card .sym.s1{top:50%; left:50%; transform:translate(-50%,-50%)}
+  .card:not(.face-down)::after{
+    content:""; position:absolute; z-index:1; pointer-events:none; border-radius:50%;
+    left:50%; top:50%; width:68%; height:60%;
+    transform:translate(-50%,-50%);
+    background:radial-gradient(circle, rgba(120,85,25,.18) 0 42%, rgba(120,85,25,0) 68%);
+  }
+  .card.face-down{
+    background-color:#0f2333;
+    background-image:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMDAiIGhlaWdodD0iMjg0IiB2aWV3Qm94PSIwIDAgMjAwIDI4NCI+PGRlZnM+PGcgaWQ9ImFybSI+PGxpbmUgeDE9IjEwMCIgeTE9IjE0MiIgeDI9IjEwMCIgeTI9Ijc2IiBzdHJva2U9IiNjOGEyNGEiIHN0cm9rZS13aWR0aD0iMy40Ii8+PGxpbmUgeDE9IjkxIiB5MT0iODQiIHgyPSIxMDkiIHkyPSI4NCIgc3Ryb2tlPSIjYzhhMjRhIiBzdHJva2Utd2lkdGg9IjIuNiIvPjxsaW5lIHgxPSI5NCIgeTE9IjEwMiIgeDI9IjEwNiIgeTI9IjEwMiIgc3Ryb2tlPSIjYzhhMjRhIiBzdHJva2Utd2lkdGg9IjIuMiIvPjwvZz48L2RlZnM+PHJlY3Qgd2lkdGg9IjIwMCIgaGVpZ2h0PSIyODQiIHJ4PSIxNiIgZmlsbD0iIzBmMjMzMyIvPjxyZWN0IHg9IjkiIHk9IjkiIHdpZHRoPSIxODIiIGhlaWdodD0iMjY2IiByeD0iMTIiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2M4YTI0YSIgc3Ryb2tlLXdpZHRoPSIxLjYiLz48cmVjdCB4PSIxNSIgeT0iMTUiIHdpZHRoPSIxNzAiIGhlaWdodD0iMjU0IiByeD0iOSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjNmY1YTI0IiBzdHJva2Utd2lkdGg9IjEuMSIvPjxjaXJjbGUgY3g9IjEwMCIgY3k9IjE0MiIgcj0iNjIiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2M4YTI0YSIgc3Ryb2tlLXdpZHRoPSIxLjgiIG9wYWNpdHk9Ii45Ii8+PGNpcmNsZSBjeD0iMTAwIiBjeT0iMTQyIiByPSI0NSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjNmY1YTI0IiBzdHJva2Utd2lkdGg9IjEuNCIgb3BhY2l0eT0iLjkiLz48dXNlIGhyZWY9IiNhcm0iIHRyYW5zZm9ybT0icm90YXRlKDAgMTAwIDE0MikiLz48dXNlIGhyZWY9IiNhcm0iIHRyYW5zZm9ybT0icm90YXRlKDQ1IDEwMCAxNDIpIi8+PHVzZSBocmVmPSIjYXJtIiB0cmFuc2Zvcm09InJvdGF0ZSg5MCAxMDAgMTQyKSIvPjx1c2UgaHJlZj0iI2FybSIgdHJhbnNmb3JtPSJyb3RhdGUoMTM1IDEwMCAxNDIpIi8+PHVzZSBocmVmPSIjYXJtIiB0cmFuc2Zvcm09InJvdGF0ZSgxODAgMTAwIDE0MikiLz48dXNlIGhyZWY9IiNhcm0iIHRyYW5zZm9ybT0icm90YXRlKDIyNSAxMDAgMTQyKSIvPjx1c2UgaHJlZj0iI2FybSIgdHJhbnNmb3JtPSJyb3RhdGUoMjcwIDEwMCAxNDIpIi8+PHVzZSBocmVmPSIjYXJtIiB0cmFuc2Zvcm09InJvdGF0ZSgzMTUgMTAwIDE0MikiLz48Y2lyY2xlIGN4PSIxMDAiIGN5PSIxNDIiIHI9IjYiIGZpbGw9IiNjOGEyNGEiLz48Y2lyY2xlIGN4PSIxMDAiIGN5PSIxNDIiIHI9IjI3IiBmaWxsPSJub25lIiBzdHJva2U9IiNjOGEyNGEiIHN0cm9rZS13aWR0aD0iMi44IiBvcGFjaXR5PSIuNSIvPjwvc3ZnPg==");
+    background-size:100% 100%;
+    background-position:center;
+    box-shadow:var(--card-shadow);
+  }
+  .drag-ghost{
+    position:fixed; left:0; top:0; width:var(--pile-w);
+    pointer-events:none; z-index:9000; will-change:transform;
+  }
+  .drag-ghost .card{
+    box-shadow:0 16px 34px rgba(0,0,0,.55),
+      inset 0 0 0 1px rgba(124,94,34,.6),
+      inset 0 0 0 3px rgba(255,252,240,.92),
+      inset 0 0 0 4px rgba(150,116,44,.38);
+  }
+  .drag-ok{ box-shadow:0 0 0 3px #67e8a0, 0 0 16px rgba(103,232,160,.45); border-radius:12px; }
+  .card.sel{outline:3px solid #9fc4ff; outline-offset:-3px; border-radius:8px}
+  .card.hint-src{outline:3px solid var(--gold); outline-offset:-3px; border-radius:8px; animation:hp 1s ease-in-out infinite}
+  @keyframes hp{50%{outline-color:#fff0c2}}
+  .col.hint-dest,.pile.hint-dest{
+    box-shadow:0 0 0 3px var(--gold), 0 0 16px rgba(245,199,106,.6);
+    border-radius:12px;
+  }
+
+  #winOverlay{
+    position:fixed; inset:0; background:rgba(0,0,0,.72); display:none;
+    align-items:center; justify-content:center; z-index:100;
+  }
+  #winOverlay.show{display:flex}
+  .winbox{
+    background:#fff; color:#222; border-radius:20px; padding:28px 32px; text-align:center;
+    max-width:320px; width:90%; box-shadow:0 20px 60px rgba(0,0,0,.5);
+  }
+  .winbox h2{margin:0 0 6px; font-size:26px}
+  .winbox p{margin:6px 0; color:#555; font-size:15px}
+  .winbox .actions{display:flex; gap:10px; margin-top:18px; justify-content:center; flex-wrap:wrap}
+  .winbox .actions .btn{background:#1d6b45; color:#fff; min-height:42px; font-size:15px}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="stats">
+    <span>⏱ <b id="time">0:00</b></span>
+    <span>Ходы: <b id="moves">0</b></span>
+  </div>
+  <div style="display:flex;gap:6px">
+    <button class="btn" id="hintBtn" title="Подсказка">💡</button>
+    <button class="btn" id="undoBtn" title="Отменить ход">↩️</button>
+    <button class="btn primary" id="newBtn">Новая</button>
+  </div>
+</div>
+
+<div class="toprow">
+  <div class="stockzone">
+    <div class="pile" id="stock" data-act="stock"></div>
+    <div class="pile" id="waste" data-act="waste"></div>
+  </div>
+  <div class="fdzone" id="fdzone"></div>
+</div>
+<div id="board"></div>
+
+<div id="winOverlay"><div class="winbox">
+  <h2>🎉 Победа!</h2>
+  <p id="winStats"></p>
+  <div class="actions">
+    <button class="btn" id="againBtn">Сыграть ещё</button>
+  </div>
+</div></div>
+
+<script>
+'use strict';
+/* ================= КОНСТАНТЫ ================= */
+const SUITS = ['♠','♥','♦','♣'];
+const SUIT_NAMES = { '♠':'s','♥':'h','♦':'d','♣':'c' };
+const RED_SUIT = { '♠':0, '♥':1, '♦':1, '♣':0 };
+const RANKS = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+
+/* ================= СОСТОЯНИЕ ================= */
+let stock = [], waste = [], cols = [], fds = [];
+let moves = 0, seconds = 0, timer = null, won = false;
+let selected = null;         // {type:'col', col, ci} | {type:'waste'} | null
+let history = [];
+let curW = 90, curH = 128;
+
+const $ = id => document.getElementById(id);
+const boardEl = () => $('board');
+const fdzoneEl = () => $('fdzone');
+
+function makeDeck(){
+  const d = [];
+  for(const s of SUITS)
+    for(let r=0;r<13;r++)
+      d.push({ suit:s, rank:r, id:SUIT_NAMES[s]+r, faceUp:false });
+  return d;
+}
+function shuffle(a){
+  for(let i=a.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [a[i],a[j]] = [a[j],a[i]];
+  }
+  return a;
+}
+function pileW(){ return curW; }
+function pileH(){ return curH; }
+function stepUp(){ return Math.max(14, Math.min(24, Math.round(curH*0.22))); }
+function stepDown(){ return Math.max(5, Math.round(curH*0.1)); }
+function fmt(s){
+  const m = Math.floor(s/60), ss = s%60;
+  return m + ':' + (ss<10?'0':'') + ss;
+}
+
+/* ================= ПРАВИЛА ================= */
+function canPlaceCol(card, colIdx){
+  const col = cols[colIdx];
+  if(!col.length) return card.rank === 12; // на пустое место только король
+  const top = col[col.length-1];
+  return top.faceUp && top.rank === card.rank + 1 && RED_SUIT[top.suit] !== RED_SUIT[card.suit];
+}
+function canPlaceFd(card, fdIdx){
+  const f = fds[fdIdx];
+  if(!f.length) return card.rank === 0; // в дом только туз
+  const t = f[f.length-1];
+  return t.suit === card.suit && t.rank === card.rank - 1;
+}
+function fdForCard(card){
+  for(let i=0;i<4;i++) if(canPlaceFd(card,i)) return i;
+  return -1;
+}
+
+/* ================= СНАПШОТЫ (undo) ================= */
+function cloneCards(arr){ return arr.map(c => ({ suit:c.suit, rank:c.rank, id:c.id, faceUp:c.faceUp })); }
+function snapshot(){
+  return {
+    stock: cloneCards(stock),
+    waste: cloneCards(waste),
+    cols: cols.map(c => cloneCards(c)),
+    fds: fds.map(f => cloneCards(f)),
+    moves: moves
+  };
+}
+function record(){
+  history.push(snapshot());
+  if(history.length > 120) history.shift();
+}
+
+/* ================= ХОДЫ ================= */
+function flipTop(colIdx){
+  const col = cols[colIdx];
+  if(col.length && !col[col.length-1].faceUp) col[col.length-1].faceUp = true;
+}
+function getSelCards(){
+  if(!selected) return null;
+  if(selected.type === 'waste'){
+    if(!waste.length) return null;
+    return { cards:[waste[waste.length-1]], src:{type:'waste'} };
+  }
+  const col = cols[selected.col];
+  if(selected.ci < 0 || selected.ci >= col.length) return null;
+  const run = col.slice(selected.ci);
+  if(run.some(c => !c.faceUp)) return null;
+  return { cards: run, src:{type:'col', col:selected.col} };
+}
+function clearSel(needRender){
+  if(selected){ selected = null; if(needRender) render(); }
+}
+
+function moveToCol(destCol){
+  const sel = getSelCards();
+  if(!sel) return false;
+  if(sel.src.type==='col' && sel.src.col===destCol){ clearSel(true); return false; }
+  if(!canPlaceCol(sel.cards[0], destCol)) return false;
+  record();
+  if(sel.src.type==='col'){
+    const col = cols[sel.src.col];
+    col.splice(col.length - sel.cards.length);
+    flipTop(sel.src.col);
+  } else {
+    waste.pop();
+  }
+  cols[destCol].push(...sel.cards);
+  selected = null;
+  moves++;
+  render();
+  return true;
+}
+
+function moveToFd(fdIdx){
+  const sel = getSelCards();
+  if(!sel || sel.cards.length !== 1) return false;
+  const card = sel.cards[0];
+  if(!canPlaceFd(card, fdIdx)) return false;
+  record();
+  if(sel.src.type==='col'){
+    cols[sel.src.col].pop();
+    flipTop(sel.src.col);
+  } else {
+    waste.pop();
+  }
+  fds[fdIdx].push(card);
+  selected = null;
+  moves++;
+  render();
+  checkWin();
+  return true;
+}
+
+function drawStock(){
+  record();
+  if(stock.length){
+    const card = stock.pop();
+    card.faceUp = true;
+    waste.push(card);
+  } else if(waste.length){
+    stock = waste.slice().reverse();
+    stock.forEach(c => { c.faceUp = false; });
+    waste = [];
+  } else {
+    return;
+  }
+  selected = null;
+  render();
+}
+
+function selectRun(colIdx, ci){
+  const col = cols[colIdx];
+  if(ci<0 || ci>=col.length) return;
+  if(!col[ci].faceUp){ clearSel(true); return; }
+  selected = { type:'col', col:colIdx, ci:ci };
+  render();
+}
+
+function isPartOfSelection(colIdx, ci){
+  return selected && selected.type==='col' && selected.col===colIdx && ci>=selected.ci;
+}
+
+/* ================= ТАПЫ ================= */
+function tapColArea(colIdx, ci){
+  if(ci<0 && !selected) return; // пустое место без выбора
+  if(selected){
+    // попытка положить выбранную стопку в эту колонку
+    if(moveToCol(colIdx)) return;
+    if(ci>=0 && isPartOfSelection(colIdx, ci)){ clearSel(true); return; }
+    if(ci>=0 && cols[colIdx][ci].faceUp){
+      // выбранное сюда не кладётся — переключаем выбор на другую карту
+      selectRun(colIdx, ci);
+      return;
+    }
+    clearSel(true);
+    return;
+  }
+  // нет выбора: тап по карте
+  const col = cols[colIdx];
+  if(ci<0 || ci>=col.length) return;
+  const card = col[ci];
+  if(!card.faceUp) return;
+  if(ci === col.length-1){
+    const f = fdForCard(card);
+    if(f>=0){ selected = { type:'col', col:colIdx, ci:ci }; moveToFd(f); return; }
+  }
+  selectRun(colIdx, ci);
+}
+
+function tapWaste(){
+  if(selected){ clearSel(true); return; }
+  if(!waste.length) return;
+  const card = waste[waste.length-1];
+  const f = fdForCard(card);
+  if(f>=0){ selected = { type:'waste' }; moveToFd(f); return; }
+  selected = { type:'waste' };
+  render();
+}
+
+function tapFd(fdIdx){
+  if(!selected) return;
+  moveToFd(fdIdx);
+}
+
+function draw(){
+  drawStock();
+}
+
+/* ================= РЕНДЕР ================= */
+function cornerHTML(card){
+  return '<div class="corner">'+RANKS[card.rank]+'<small>'+card.suit+'</small></div>';
+}
+
+function pileCardsHTML(cards){
+  // Рисуем только последние 3 карты. Новейшая карта (последняя в массиве)
+  // всегда сверху стопки и полностью видна; старые выглядывают снизу-справа.
+  const n = cards.length, start = Math.max(0, n-3);
+  let h = '';
+  for(let i=start;i<n;i++){
+    const c = cards[i], k = n-1-i;      // k=0 у новейшей, больше у старых
+    const red = RED_SUIT[c.suit] ? 'red' : 'black';
+    h += '<div class="card '+red+'" style="top:'+(k*3)+'px;left:'+(k*3)+'px;z-index:'+((i-start)+1)+'">'
+       + cornerHTML(c) + '<span class="sym s1">'+c.suit+'</span></div>';
+  }
+  return h;
+}
+
+function boardCardHTML(card, colIdx, ci, off){
+  if(!card.faceUp){
+    return '<div class="card face-down" data-col="'+colIdx+'" data-ci="'+ci+'" style="top:'+off+'px;z-index:'+(ci+2)+'"></div>';
+  }
+  const red = RED_SUIT[card.suit] ? 'red' : 'black';
+  const sel = (selected && selected.type==='col' && selected.col===colIdx && ci>=selected.ci) ? ' sel' : '';
+  return '<div class="card '+red+sel+'" data-col="'+colIdx+'" data-ci="'+ci+'" style="top:'+off+'px;z-index:'+(ci+2)+'">'
+       + cornerHTML(card) + '<span class="sym s1">'+card.suit+'</span></div>';
+}
+
+function renderStock(){
+  const el = $('stock');
+  el.classList.toggle('empty', !stock.length);
+  let h = stock.length ? '<div class="card face-down"></div>' : '<div class="recycle">↻</div>';
+  h += '<div class="cnt">'+stock.length+'</div>';
+  el.innerHTML = h;
+}
+function renderWaste(){
+  const el = $('waste');
+  el.classList.toggle('empty', !waste.length);
+  if(!waste.length){ el.innerHTML = ''; return; }
+  let html = pileCardsHTML(waste);
+  if(selected && selected.type==='waste'){
+    html += '';
+  }
+  el.innerHTML = html;
+  if(selected && selected.type==='waste'){
+    const top = el.querySelector('.card:last-child');
+    if(top) top.classList.add('sel');
+  }
+}
+function renderFds(){
+  const zone = fdzoneEl();
+  let h = '';
+  for(let i=0;i<4;i++){
+    h += '<div class="pile'+(fds[i].length?'':' empty')+'" data-fd="'+i+'">'
+       + (fds[i].length ? pileCardsHTML(fds[i]) : '') + '</div>';
+  }
+  zone.innerHTML = h;
+}
+function renderBoard(){
+  const el = boardEl();
+  let h = '';
+  for(let c=0;c<7;c++){
+    const col = cols[c];
+    let inner = '', off = 0;
+    for(let i=0;i<col.length;i++){
+      inner += boardCardHTML(col[i], c, i, off);
+      off += col[i].faceUp ? stepUp() : stepDown();
+    }
+    const colH = Math.round(off + curH + 6);
+    h += '<div class="col" data-col="'+c+'" style="height:'+colH+'px">'
+       + inner + '<div class="droplayer" data-col="'+c+'"></div></div>';
+  }
+  el.innerHTML = h;
+}
+function render(){
+  $('time').textContent = fmt(seconds);
+  $('moves').textContent = moves;
+  $('undoBtn').disabled = !history.length;
+  renderStock();
+  renderWaste();
+  renderFds();
+  renderBoard();
+}
+
+/* ================= ТАЙМЕР / ПОБЕДА ================= */
+function startTimer(){
+  stopTimer();
+  timer = setInterval(() => {
+    if(!won){ seconds++; $('time').textContent = fmt(seconds); }
+  }, 1000);
+}
+function stopTimer(){ if(timer){ clearInterval(timer); timer = null; } }
+function checkWin(){
+  const total = fds.reduce((s,f)=>s+f.length,0);
+  if(total === 52 && !won){
+    won = true;
+    stopTimer();
+    $('winStats').textContent = 'Время: ' + fmt(seconds) + ' · Ходы: ' + moves;
+    $('winOverlay').classList.add('show');
+  }
+}
+
+/* ================= НОВАЯ ИГРА ================= */
+function newGame(){
+  stopTimer();
+  moves = 0; seconds = 0; won = false; selected = null; history = [];
+  const deck = shuffle(makeDeck());
+  stock = []; waste = []; cols = Array.from({length:7},()=>[]); fds = Array.from({length:4},()=>[]);
+  let k = 0;
+  for(let c=0;c<7;c++){
+    for(let i=0;i<=c;i++){
+      const card = deck[k++];
+      card.faceUp = (i===c);
+      cols[c].push(card);
+    }
+  }
+  for(;k<52;k++) stock.push(deck[k]);
+  $('winOverlay').classList.remove('show');
+  render();
+  startTimer();
+}
+
+function undo(){
+  if(!history.length) return;
+  const s = history.pop();
+  stock = s.stock; waste = s.waste; cols = s.cols; fds = s.fds; moves = s.moves;
+  selected = null;
+  render();
+}
+
+/* ================= ПОДСКАЗКА ================= */
+function findHint(){
+  // 1. верх колоды -> дом
+  if(waste.length){
+    const c = waste[waste.length-1], f = fdForCard(c);
+    if(f>=0) return { src:'waste', k:'fd', fd:f };
+  }
+  // 2. нижние карты колонок -> дом
+  for(let c=0;c<7;c++){
+    const col = cols[c];
+    if(!col.length) continue;
+    const top = col[col.length-1];
+    if(top.faceUp){
+      const f = fdForCard(top);
+      if(f>=0) return { src:{col:c, ci:col.length-1}, k:'fd', fd:f };
+    }
+  }
+  // 3. верх колоды -> колонка
+  if(waste.length){
+    const c = waste[waste.length-1];
+    for(let j=0;j<7;j++) if(canPlaceCol(c,j)) return { src:'waste', k:'col', col:j };
+  }
+  // 4. стопки колонок -> другая колонка
+  for(let c=0;c<7;c++){
+    const col = cols[c];
+    const firstFaceUp = col.findIndex(x => x.faceUp);
+    if(firstFaceUp<0) continue;
+    for(let ci=firstFaceUp;ci<col.length;ci++){
+      const card = col[ci];
+      for(let j=0;j<7;j++){
+        if(j===c) continue;
+        if(canPlaceCol(card,j)) return { src:{col:c, ci:ci}, k:'col', col:j };
+      }
+    }
+  }
+  // 5. осталось взять из колоды
+  if(stock.length || waste.length) return { k:'draw' };
+  return null;
+}
+let hintTimer = null;
+function clearHintDom(){
+  document.querySelectorAll('.hint-src,.hint-dest').forEach(el => el.classList.remove('hint-src','hint-dest'));
+}
+function showHint(){
+  if(hintTimer){ clearTimeout(hintTimer); hintTimer = null; }
+  clearHintDom();
+  const h = findHint();
+  if(!h){
+    $('newBtn').style.animation = 'none';
+    void $('newBtn').offsetWidth;
+    $('newBtn').style.animation = 'hp 1s ease-in-out 2';
+    return;
+  }
+  let srcEl = null;
+  if(h.src === 'waste') srcEl = $('waste').querySelector('.card:last-child');
+  else if(h.src) srcEl = boardEl().querySelector('.card[data-col="'+h.src.col+'"][data-ci="'+h.src.ci+'"]');
+  let destEl = null;
+  if(h.k==='fd') destEl = document.querySelector('[data-fd="'+h.fd+'"]');
+  else if(h.k==='col') destEl = boardEl().querySelector('.col[data-col="'+h.col+'"]');
+  else if(h.k==='draw') destEl = $('stock');
+  if(srcEl) srcEl.classList.add('hint-src');
+  if(destEl) destEl.classList.add('hint-dest');
+  hintTimer = setTimeout(() => { clearHintDom(); hintTimer = null; }, 2600);
+}
+
+/* ================= ВВОД: тап + плавный drag & drop ================= */
+let suppressClick = false;
+let drag = null; // {src, pid, startX, startY, grabbed, el, top, run, ghost, drop, hlEl}
+
+function dragSourceOf(el){
+  if(!el || el.classList.contains('face-down')) return null;
+  if(el.closest('#waste')){
+    if(!waste.length) return null;
+    return {type:'waste'};
+  }
+  if(el.dataset.col !== undefined){
+    const c = +el.dataset.col, ci = +el.dataset.ci;
+    if(!cols[c] || ci<0 || ci>=cols[c].length || !cols[c][ci].faceUp) return null;
+    return {type:'col', col:c, ci:ci};
+  }
+  return null;
+}
+function runCardsOf(src){
+  if(src.type === 'waste') return [waste[waste.length-1]];
+  return cols[src.col].slice(src.ci);
+}
+function sourceTopEl(src){
+  if(src.type === 'waste') return $('waste').querySelector('.card:last-child');
+  return boardEl().querySelector('.card[data-col="'+src.col+'"][data-ci="'+src.ci+'"]');
+}
+function hideSourceRun(src){
+  if(src.type === 'waste'){
+    const el = $('waste').querySelector('.card:last-child');
+    if(el) el.style.visibility = 'hidden';
+    return;
+  }
+  for(let i=src.ci;i<cols[src.col].length;i++){
+    const el = boardEl().querySelector('.card[data-col="'+src.col+'"][data-ci="'+i+'"]');
+    if(el) el.style.visibility = 'hidden';
+  }
+}
+function buildGhost(cards){
+  const g = document.createElement('div');
+  g.className = 'drag-ghost';
+  let h = '', off = 0;
+  for(const card of cards){
+    const red = RED_SUIT[card.suit] ? 'red' : 'black';
+    h += '<div class="card '+red+'" style="top:'+off+'px">'
+       + cornerHTML(card) + '<span class="sym s1">'+card.suit+'</span></div>';
+    off += stepUp();
+  }
+  g.style.height = (off + curH) + 'px';
+  g.innerHTML = h;
+  document.body.appendChild(g);
+  return g;
+}
+function clearDropHl(){
+  if(drag && drag.hlEl){ drag.hlEl.classList.remove('drag-ok'); drag.hlEl = null; }
+}
+function dropTargetAt(x, y){
+  const u = document.elementFromPoint(x, y);
+  if(!u) return null;
+  const fdEl = u.closest('[data-fd]');
+  if(fdEl) return {kind:'fd', idx:+fdEl.dataset.fd};
+  const colEl = u.closest('#board .col');
+  if(colEl) return {kind:'col', col:+colEl.dataset.col};
+  return null;
+}
+function updateDropHl(e){
+  clearDropHl();
+  const u = document.elementFromPoint(e.clientX, e.clientY);
+  if(!u) return;
+  const run0 = drag.run[0];
+  let target = null, ok = false;
+  const fdEl = u.closest('[data-fd]');
+  if(fdEl){
+    ok = drag.run.length===1 && canPlaceFd(run0, +fdEl.dataset.fd);
+    target = fdEl;
+  } else {
+    const colEl = u.closest('#board .col');
+    if(colEl){
+      const ci = +colEl.dataset.col;
+      ok = canPlaceCol(run0, ci) && !(drag.src.type==='col' && drag.src.col===ci);
+      target = colEl;
+    }
+  }
+  if(target && ok){ target.classList.add('drag-ok'); drag.hlEl = target; }
+}
+function endDrag(commit){
+  const d = drag;
+  if(!d) return;
+  clearDropHl();
+  drag = null;
+  if(d.ghost && d.ghost.parentNode) d.ghost.parentNode.removeChild(d.ghost);
+  if(d.el){ try{ if(d.el.releasePointerCapture) d.el.releasePointerCapture(d.pid); }catch(_){ } }
+  if(!d.grabbed) return; // это был тап — обработает click
+  suppressClick = true;
+  setTimeout(() => { suppressClick = false; }, 80);
+  let ok = false;
+  if(commit && d.drop){
+    selected = d.src;
+    if(d.drop.kind === 'fd') ok = moveToFd(d.drop.idx);
+    else ok = moveToCol(d.drop.col);
+    if(selected) selected = null;
+  }
+  if(!ok){ selected = null; render(); }
+}
+
+document.addEventListener('pointerdown', e => {
+  if(won || drag) return;
+  const el = e.target.closest('.card');
+  if(!el) return;
+  const src = dragSourceOf(el);
+  if(!src) return;
+  const top = sourceTopEl(src);
+  if(!top) return;
+  drag = { src:src, pid:e.pointerId, startX:e.clientX, startY:e.clientY,
+           grabbed:false, el:el, top:top, run:null, ghost:null, drop:null, hlEl:null };
+  try{ el.setPointerCapture(e.pointerId); }catch(_){}
+});
+document.addEventListener('pointermove', e => {
+  if(!drag || drag.pid !== e.pointerId) return;
+  const dx = e.clientX - drag.startX, dy = e.clientY - drag.startY;
+  if(!drag.grabbed && Math.hypot(dx, dy) > 6){
+    drag.grabbed = true;
+    drag.run = runCardsOf(drag.src);
+    const rect = drag.top.getBoundingClientRect();
+    drag.ghost = buildGhost(drag.run);
+    drag.ghost.style.left = rect.left + 'px';
+    drag.ghost.style.top = rect.top + 'px';
+    hideSourceRun(drag.src);
+  }
+  if(drag.grabbed && drag.ghost){
+    drag.ghost.style.transform = 'translate('+(e.clientX-drag.startX)+'px,'+(e.clientY-drag.startY)+'px)';
+    drag.drop = dropTargetAt(e.clientX, e.clientY);
+    updateDropHl(e);
+  }
+});
+document.addEventListener('pointerup', e => {
+  if(!drag || drag.pid !== e.pointerId) return;
+  drag.drop = dropTargetAt(e.clientX, e.clientY);
+  endDrag(true);
+});
+document.addEventListener('pointercancel', e => {
+  if(!drag || drag.pid !== e.pointerId) return;
+  endDrag(false);
+});
+
+document.addEventListener('click', e => {
+  if(suppressClick){ suppressClick = false; return; }
+  if(won) return;
+  const el = e.target.closest('[data-act],[data-col],[data-fd]');
+  if(!el) { if(selected) clearSel(true); return; }
+  if(el.dataset.act === 'stock'){ draw(); return; }
+  if(el.dataset.act === 'waste'){ tapWaste(); return; }
+  if(el.dataset.fd !== undefined){ tapFd(parseInt(el.dataset.fd,10)); return; }
+  if(el.dataset.col !== undefined){
+    const ci = el.dataset.ci;
+    tapColArea(parseInt(el.dataset.col,10), ci===undefined ? -1 : parseInt(ci,10));
+  }
+});
+document.addEventListener('dblclick', e => e.preventDefault());
+
+$('newBtn').addEventListener('click', newGame);
+$('undoBtn').addEventListener('click', undo);
+$('hintBtn').addEventListener('click', showHint);
+$('againBtn').addEventListener('click', newGame);
+
+/* ================= АДАПТИВ (размер карт) ================= */
+let resizeT = null;
+function recalc(){
+  const vw = Math.min(window.innerWidth || 360, 760);
+  const gap = Math.max(4, Math.min(10, Math.round((window.innerWidth || 360)*0.012)));
+  const avail = vw - 16 - 6*gap;
+  curW = Math.max(40, Math.floor(avail/7));
+  curH = Math.round(curW*1.42);
+  const r = document.documentElement.style;
+  r.setProperty('--pile-w', curW+'px');
+  r.setProperty('--pile-h', curH+'px');
+  r.setProperty('--gap', gap+'px');
+  render();
+}
+window.addEventListener('resize', () => {
+  if(resizeT) clearTimeout(resizeT);
+  resizeT = setTimeout(recalc, 160);
+});
+
+newGame();
+recalc();
+</script>
+</body>
+</html>
