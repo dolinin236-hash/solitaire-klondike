@@ -635,7 +635,7 @@ function newGame(fromMenu){
   }
   for(;k<52;k++) stock.push(deck[k]);
   $('winOverlay').classList.remove('show');
-  $('menuScreen').classList.remove('show');
+  if(!fromMenu) $('menuScreen').classList.remove('show');
   render();
   if(!fromMenu) startTimer();
 }
